@@ -1,0 +1,99 @@
+name: Main workflow
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build3:
+    name: Build libraries v3
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/esp32-arduino-lib-builder
+      volumes:
+        - ${{ github.workspace }}:/w
+    steps:
+      - name: Install zip
+        run: apt update && apt install -y zip
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Modify configs
+        run: |
+          for path in `ls /w/configs/defconfig.*`
+          do
+            config=$(basename $path)
+            cat /w/configs/$config >>/opt/esp/lib-builder/configs/$config
+          done
+      - name: Build
+        run: |
+          cd /opt/esp/lib-builder/
+          ./build.sh
+      - name: Zip artifacts
+        run: |
+          cd /opt/esp/lib-builder/out/tools/
+          zip -r /w/esp32-arduino-libs.zip esp32-arduino-libs
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-arduino-libs-v3
+          path: /w/*.zip
+
+  build2:
+    name: Build libraries v2
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/esp32-arduino-lib-builder
+      volumes:
+        - ${{ github.workspace }}:/w
+    steps:
+      - name: Install zip
+        run: apt update && apt install -y unzip zip
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Switch to branch
+        run: |
+          cd /opt/esp/lib-builder/
+          git switch release/v4.4
+      - name: Modify configs
+        run: |
+          for path in `ls /w/configs/defconfig.*`
+          do
+            config=$(basename $path)
+            cat /w/configs/$config >>/opt/esp/lib-builder/configs/$config
+          done
+      - name: Build
+        run: |
+          cd /opt/esp/lib-builder/
+          ./build.sh
+      - name: Zip artifacts
+        run: |
+          ver=2.0.17
+          cd /w/
+          wget https://github.com/espressif/arduino-esp32/releases/download/$ver/esp32-$ver.zip
+          unzip esp32-$ver.zip
+          rm -f esp32-$ver.zip
+          cp -r /opt/esp/lib-builder/out/tools/* esp32-$ver/tools/
+          zip -r esp32-$ver.zip esp32-$ver
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-arduino-libs-v2
+          path: /w/*.zip
+
+  release:
+    needs: [build2, build3]
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            esp32-arduino-libs-v2/*.zip
+            esp32-arduino-libs-v3/*.zip
