@@ -9,7 +9,7 @@ jobs:
     name: Build libraries v3
     runs-on: ubuntu-latest
     container:
-      image: espressif/esp32-arduino-lib-builder:release-v5.3
+      image: espressif/esp32-arduino-lib-builder:release-v5.4
       volumes:
         - ${{ github.workspace }}:/w
     steps:
